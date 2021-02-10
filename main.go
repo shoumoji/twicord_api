@@ -13,16 +13,8 @@ import (
 	"github.com/labstack/echo"
 )
 
-// type twitterUser struct {
-// name            string `json:"name"`
-// screenName      string `json:"screen_name"`
-// userID          uint   `json:"id"`
-// includeEntities bool   `json:"include_entites`
-// profileImageURL string `json:"profile_image_url_https"`
-// }
-
 type twitterUser struct {
-	ID              int64       `json:"id"`
+	ID              int64       `db:"id" json:"id"`
 	IDStr           string      `json:"id_str"`
 	Name            string      `json:"name"`
 	ScreenName      string      `json:"screen_name"`
@@ -103,56 +95,70 @@ type twitterAPIErrors struct {
 	Message string `json:"message"`
 }
 
+var TwitterUserAPIReq *http.Request
+
+func init() {
+	// 初期化処理、TwitterAPIのURL作成と、ヘッダーへのBearer tokenの追加
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file,", err)
+	}
+
+	TwitterUserAPIReq, err = http.NewRequest(http.MethodGet, "https://api.twitter.com/1.1/users/show.json", nil)
+	if err != nil {
+		log.Fatal("init error: make TwitterUserAPIReq failed,", err)
+	}
+
+	bearerToken := os.Getenv("BEARER_TOKEN")
+	TwitterUserAPIReq.Header.Add("authorization", "Bearer "+bearerToken)
+	if err != nil {
+		log.Fatal("init error: init add http header failed,", err)
+	}
+}
+
 func main() {
 	e := echo.New()
 
-	e.POST("/regist/twitter/:username", HandleRegistByTwitterName)
+	e.POST("/regist/twitter/:screen_name", HandleRegistByTwitterName)
+	// e.GET("/registered", HandleRegistered)
 	e.Start(":8000")
 }
 
-// Regist twitter ID by twitter screen name
+// HandleRegistByTwitterName is registed database by twitter name
 func HandleRegistByTwitterName(c echo.Context) error {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-	bearerToken := os.Getenv("BEARER_TOKEN")
+	req := TwitterUserAPIReq
+	screenName := c.Param("screen_name")
 
-	twitterUserAPIURL := "https://api.twitter.com/1.1/users/show.json"
-	req, err := http.NewRequest("GET", twitterUserAPIURL, nil)
-	if err != nil {
-		return c.String(http.StatusBadRequest, "URL cannnot make")
-	}
+	// URLパラメータ作成
 	params := req.URL.Query()
-	userName := c.Param("username")
-	params.Add("screen_name", userName)
+	params.Add("screen_name", screenName)
 	req.URL.RawQuery = params.Encode()
-	fmt.Println(req.URL.String())
 
-	req.Header.Add("authorization", "Bearer "+bearerToken)
-	if err != nil {
-		return c.String(http.StatusBadRequest, "Unknown twitter screen name")
-	}
-
-	timeout := time.Duration(5 * time.Second)
+	// Twitter APIを叩く
 	client := &http.Client{
-		Timeout: timeout,
+		Timeout: time.Duration(5 * time.Second),
 	}
-
 	resp, err := client.Do(req)
+
+	// URLパラメータ削除
+	params.Del("screen_name")
+	req.URL.RawQuery = params.Encode()
+	fmt.Println(req)
 	if err != nil {
+		log.Println(err)
 		return c.String(http.StatusBadRequest, "Twitter API Request err")
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return c.String(http.StatusBadRequest, "Cannot read body")
 	}
 
 	userDataJSON := new(twitterUser)
 	if err := json.Unmarshal(body, userDataJSON); err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		return c.String(http.StatusBadRequest, "JSON parse error")
 	}
 
@@ -162,5 +168,6 @@ func HandleRegistByTwitterName(c echo.Context) error {
 	fmt.Println(userDataJSON)
 
 	// TODO: screen_nameと登録日をSQLに保存
+
 	return c.String(http.StatusOK, userDataJSON.Name+" is registration completed")
 }
