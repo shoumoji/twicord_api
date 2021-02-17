@@ -26,19 +26,32 @@ func init() {
 	mysqlProtocol := os.Getenv("MYSQL_PROTOCOL")
 	mysqlAddr := os.Getenv("MYSQL_ADDRESS")
 	mysqlDBName := "twicord"
-	db, err = sqlx.Connect("mysql", mysqlUser+":"+mysqlPass+"@"+mysqlProtocol+"("+mysqlAddr+")"+"/"+mysqlDBName)
+
+	mysqlDSN := mysqlUser + ":" + mysqlPass + "@" + mysqlProtocol + "(" + mysqlAddr + ")" + "/" + mysqlDBName
+	db, err = sqlx.Connect("mysql", mysqlDSN)
 	if err != nil {
 		log.Fatal("Error: connect MySQL,", err)
 	}
 
-	// MYSQLのスキーマ
-
+	// MYSQLのスキーマ定義
+	schema := `
+	CREATE TABLE IF NOT EXISTS twitter_user(
+		id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+		screen_name CHAR(50) NOT NULL,
+		image_url VARCHAR(2500)
+	);`
+	db.MustExec(schema)
 }
 
 func main() {
 	e := echo.New()
 
 	e.POST("/regist/twitter/:screen_name", HandleRegistByTwitterName)
-	// e.GET("/registered", HandleRegistered)
+	// フロントエンドで表にする用の今登録してるユーザを全てとってくるやつ
+	// e.GET("/twitter/all", HandleRegistered)
+
+	// memo: twitterAPIv2を使えばstreamとしてTweetをとってこれる
+	// rulesを追加することでruleにそったものだけをストリームできる(ルールごと512制限があるので、同時に20ユーザぐらいのTweetをストリームできそう)
+	// https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/api-reference/post-tweets-search-stream-rules
 	e.Start(":8000")
 }

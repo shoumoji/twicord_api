@@ -13,14 +13,14 @@ import (
 )
 
 type twitterUser struct {
-	ID              uint64      `db:"id" json:"id"`
+	ID              uint64      `json:"id"`
 	IDStr           string      `json:"id_str"`
 	Name            string      `json:"name"`
 	ScreenName      string      `db:"screen_name" json:"screen_name"`
 	Location        string      `json:"location"`
 	ProfileLocation interface{} `json:"profile_location"`
 	Description     string      `json:"description"`
-	URL             interface{} `db:"url" json:"url"`
+	URL             interface{} `json:"url"`
 	Entities        struct {
 		Description struct {
 			Urls []interface{} `json:"urls"`
@@ -75,7 +75,7 @@ type twitterUser struct {
 	ProfileBackgroundImageURLHTTPS interface{} `json:"profile_background_image_url_https"`
 	ProfileBackgroundTile          bool        `json:"profile_background_tile"`
 	ProfileImageURL                string      `json:"profile_image_url"`
-	ProfileImageURLHTTPS           string      `db:"profile_image_url_https" json:"profile_image_url_https"`
+	ProfileImageURLHTTPS           string      `json:"profile_image_url_https"`
 	ProfileLinkColor               string      `json:"profile_link_color"`
 	ProfileSidebarBorderColor      string      `json:"profile_sidebar_border_color"`
 	ProfileSidebarFillColor        string      `json:"profile_sidebar_fill_color"`
@@ -154,7 +154,12 @@ func HandleRegistByTwitterName(c echo.Context) error {
 	}
 	fmt.Println(userDataJSON)
 
-	// TODO: TwitterID と登録日をSQLに保存
+	// id, screen_name, profile_image_url_https(image_url) をSQLに保存
+	insert, err := db.Prepare("INSERT INTO twitter_user(id, screen_name, image_url) VALUES(?,?,?)")
+	if err != nil {
+		fmt.Println(err)
+	}
+	insert.Exec(userDataJSON.ID, userDataJSON.ScreenName, userDataJSON.ProfileImageURLHTTPS)
 
 	return c.String(http.StatusOK, userDataJSON.Name+" is registration completed")
 }
